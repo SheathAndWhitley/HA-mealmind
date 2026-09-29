@@ -1,3 +1,3 @@
-# ha-mealmind
+# HA-mealmind
 
 ## Project meant to make life easier!
