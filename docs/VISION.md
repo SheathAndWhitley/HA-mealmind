@@ -11,6 +11,8 @@
 - **Software Stack:** Python for backend server processing and custom Home Assistant integration logic. ESPHome for firmware on the ESP32-driven interaction satellite.
 - **Hardware Interfacing:** A custom microcontroller-driven satellite acting as a physical portal to *Home Assistant* and *Mealmind*. The satellite listens for a custom wake word (e.g., "Hey Mealmind") and captures voice input (e.g., *"I'd like some Indian food tomorrow"*).
 - **Ecosystem Integration:** Direct communication with *Home Assistant* via MQTT, Native API, or as a custom HACS (Home Assistant Community Store) integration.
+- **Ai model** Mistral 3 8b Instruct 2512, FP8
+   https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512
 
 #### **Functionality**
 
@@ -33,6 +35,7 @@
 - INMP441 I2S Microphone module
 - WS2812 LED ring (for visual feedback/status)
 - Wires, USB-C cable, and 5V power adapter
+
 
 #### **Skill Development**
 

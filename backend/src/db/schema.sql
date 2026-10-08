@@ -35,9 +35,9 @@ CREATE_TABLE recipe_steps (
 
 CREATE_TABLE tags (
     tag_id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE
+    name VARCHAR(100) NOT NULL UNIQUE,
     category VARCHAR(100)
-)
+);
 
 CREATE TABLE recipe_tags (
     recipe_id SERIAL REFERENCES recipe_meta(recipe_id),
