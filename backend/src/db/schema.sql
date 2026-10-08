@@ -5,8 +5,6 @@ CREATE TABLE recipe_meta (
     servings INT NOT NULL,
     preptime_minutes INT NOT NULL,
     cooktime_minutes INT NOT NULL,
-    ingredients TEXT,
-    instructions TEXT,
     continent VARCHAR(100),
     source VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -19,28 +17,29 @@ CREATE TABLE ingredients (
 );
 
 CREATE TABLE recipe_ingredients (
-    recipe_ingredient_id INT PRIMARY KEY AUTO_INCREMENT,
-    recipe_id SERIAL REFERENCES recipe_meta(recipe_id),
-    ingredient_id SERIAL REFERENCES ingredients(ingredient_id),
-    amount DECIMAL NOT NULL,
-    unit VARCHAR(50) NOT NULL
+    recipe_ingredient_id SERIAL PRIMARY KEY,
+    recipe_id INT NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
+    ingredient_id INT NOT NULL REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
+    amount DECIMAL(6, 2),
+    unit VARCHAR(50)
 );
 
-CREATE_TABLE recipe_steps (
+CREATE TABLE recipe_steps (
     step_id SERIAL PRIMARY KEY,
-    recipe_id SERIAL REFERENCES recipe_meta(recipe_id),
+    recipe_id INT NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
     step_number INT NOT NULL,
-    instruction TEXT NOT NULL
+    instruction TEXT NOT NULL,
+    UNIQUE (recipe_id, step_number)
 );
 
-CREATE_TABLE tags (
+CREATE TABLE tags (
     tag_id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     category VARCHAR(100)
 );
 
 CREATE TABLE recipe_tags (
-    recipe_id SERIAL REFERENCES recipe_meta(recipe_id),
-    tag_id SERIAL REFERENCES tags(tag_id),
+    recipe_id INT NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
+    tag_id INT NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
     PRIMARY KEY (recipe_id, tag_id)
 );
