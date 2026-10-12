@@ -140,7 +140,7 @@ def scrape_with_llm(clean_content: str) -> dict:
 
     return recipe_data
 
-def store_recipe_in_db(recipe_data: dict, db_path: path = DB_PATH) -> None:
+def store_recipe_in_db(recipe_data: dict, db_path = DB_PATH) -> None:
     """Stores the normalized recipe data in a SQLite database."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -298,4 +298,4 @@ def scrape_recipe(url: str) -> None:
     store_recipe_in_db(response)
 
 
-scrape_recipe("https://grandmasvintagerecipes.blogspot.com/2026/10/homemade-pumpernickel-bread.html")
+scrape_recipe("https://www.bbcgoodfood.com/recipes/butternut-squash-sage-risotto")
