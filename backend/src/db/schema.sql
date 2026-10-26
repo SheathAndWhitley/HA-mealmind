@@ -21,7 +21,8 @@ CREATE TABLE recipe_steps (
     recipe_id INT NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     instruction TEXT NOT NULL,
-    next_step_id INT REFERENCES recipe_steps(step_id) ON DELETE SET NULL, -- NEW: The step this block feeds into
+    next_step_id INT REFERENCES recipe_steps(step_id) ON DELETE SET NULL, 
+    duration_text VARCHAR(100),
     UNIQUE (recipe_id, step_number)
 );
 
@@ -29,9 +30,10 @@ CREATE TABLE recipe_ingredients (
     recipe_ingredient_id SERIAL PRIMARY KEY,
     recipe_id INT NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
     ingredient_id INT NOT NULL REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
-    step_id INT REFERENCES recipe_steps(step_id) ON DELETE CASCADE, -- NEW: The step where this ingredient is added
+    step_id INT REFERENCES recipe_steps(step_id) ON DELETE CASCADE, 
     amount DECIMAL(6, 2),
-    unit VARCHAR(50)
+    unit VARCHAR(50),
+    prep_method VARCHAR(100),
 );
 
 

@@ -24,13 +24,17 @@ PROMPT = """
             {
             "name": "String (lowercase, base generic ingredient)",
             "amount": "Float or null",
-            "unit": "g | kg | ml | l | tsp | tbsp | whole | clove | pinch | null"
+            "unit": "g | kg | ml | l | tsp | tbsp | whole | clove | pinch | null",
+            "step_number": "Integer or null (the step_number where this ingredient is first added)"
+            "prep_method": "String or null (e.g., 'chopped', 'sliced', 'diced', 'minced')"
             }
         ],
         "recipe_steps": [
             {
             "step_number": 1,
-            "instruction": "String"
+            "instruction": "String",
+            "next_step_number": "Integer or null (the step_number this step feeds into; null for the final step(s))"
+            "duration_text": "String or null (e.g., '20 minutes', '5-10 minutes', '~30 minutes')"
             }
         ],
         "tags": [
@@ -51,10 +55,9 @@ PROMPT = """
 
 2. INGREDIENT CLEANING & EXTRACTION:
 - You MUST extract EVERY single ingredient mentioned in the recipe list OR step instructions. Do not omit water, flour, salt, or other basic ingredients.
-- Remove prep methods ("diced", "chopped"), brands, and descriptors from "name".
-- Examples:
-- "1 large brown onion, finely diced" -> name: "yellow onion"
-- "2 tbsp extra virgin olive oil" -> name: "olive oil"
+- Split the method e.g words like "chopped", "sliced", "diced", "minced" from the ingredient name
+- "1 large brown onion, finely diced" -> name: "yellow onion", method: "finely diced"
+- "2 tbsp extra virgin olive oil" -> name: "olive oil", method: None
 
 3. TAG STANDARDIZATION & CATEGORIES:
 - "Dietary": ONLY established diets (e.g., "gluten-free", "vegan", "vegetarian", "dairy-free", "low-carb").
@@ -71,6 +74,13 @@ PROMPT = """
 - Use JSON null (without quotes), NEVER the text string "null".
 - The "unit" key MUST ONLY use values from the allowed unit list. If a unit is non-standard (e.g., "thumb-sized piece"), convert it to 'whole' or set "unit": null.
 - Ensure ingredient names remove prep states like "cooked", "canned", "sliced", or "frozen" (e.g., "cooked salmon fillet" -> "salmon fillet").
+
+5. STEP GRAPH:
+- Number steps 1..N in the order they are performed. Use these numbers in "step_number", "next_step_number", and ingredient "step_number".
+- "next_step_number" is the step this step feeds into. Use null for the final step.
+- For each ingredient, set "step_number" to the step where it is added. Use null if it is not tied to a step.
+- Split each instruction into one atomic action per step before assigning step numbers    
+- next_step_number: it must be numerically greater than step_number, never equal or less, and must refer to a step number that exists in the output (or be null).    
     """
 
 
@@ -87,6 +97,12 @@ def extract_json_ld(soup: BeautifulSoup) -> str | None:
             continue
     return None
 
+def _to_int(value) -> int | None:
+    """Coerce an LLM-provided number to int, returning None if it isn't one."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 def receive_and_clean(url: str) -> str:
     """Fetches web content using Playwright and cleans HTML via JSON-LD or Trafilatura and BS4."""
@@ -140,15 +156,14 @@ def scrape_with_llm(clean_content: str) -> dict:
 
     return recipe_data
 
-def store_recipe_in_db(recipe_data: dict, db_path = DB_PATH) -> None:
-    """Stores the normalized recipe data in a SQLite database."""
+def store_recipe_in_db(recipe_data: dict, db_path=DB_PATH) -> None:
+    """Stores the normalized recipe data, including the step graph, in a SQLite database."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Enable foreign keys in SQLite
     cursor.execute("PRAGMA foreign_keys = ON;")
 
-    # 1. Create tables with native SQLite syntax
+    # 1. Create tables
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS recipe_meta (
             recipe_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,22 +187,26 @@ def store_recipe_in_db(recipe_data: dict, db_path = DB_PATH) -> None:
     ''')
 
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS recipe_ingredients (
-            recipe_ingredient_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipe_id INTEGER NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
-            ingredient_id INTEGER NOT NULL REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
-            amount REAL,
-            unit TEXT
-        );
-    ''')
-
-    cursor.execute('''
         CREATE TABLE IF NOT EXISTS recipe_steps (
             step_id INTEGER PRIMARY KEY AUTOINCREMENT,
             recipe_id INTEGER NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
             step_number INTEGER NOT NULL,
             instruction TEXT NOT NULL,
+            next_step_id INTEGER REFERENCES recipe_steps(step_id) ON DELETE SET NULL,
+            duration_text TEXT,
             UNIQUE (recipe_id, step_number)
+        );
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recipe_ingredients (
+            recipe_ingredient_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipe_id INTEGER NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
+            ingredient_id INTEGER NOT NULL REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
+            amount REAL,
+            unit TEXT,
+            prep_method TEXT,
+            step_id INTEGER REFERENCES recipe_steps(step_id) ON DELETE SET NULL
         );
     ''')
 
@@ -207,7 +226,7 @@ def store_recipe_in_db(recipe_data: dict, db_path = DB_PATH) -> None:
         );
     ''')
 
-    # 2. Insert Recipe Metadata
+    # 2. Insert recipe metadata
     meta = recipe_data.get("recipe_meta", {})
     cursor.execute('''
         INSERT INTO recipe_meta (title, description, servings, preptime_minutes, cooktime_minutes, continent, source)
@@ -223,7 +242,29 @@ def store_recipe_in_db(recipe_data: dict, db_path = DB_PATH) -> None:
     ))
     recipe_id = cursor.lastrowid
 
-    # 3. Insert Ingredients safely (deduplicated & normalized)
+    # 3. Insert steps first, without edges, so every step_id exists
+    steps = [s for s in recipe_data.get("recipe_steps", []) if _to_int(s.get("step_number")) is not None]
+    step_id_by_number: dict[int, int] = {}
+    for step in steps:
+        num = _to_int(step.get("step_number"))
+        cursor.execute('''
+            INSERT INTO recipe_steps (recipe_id, step_number, instruction)
+            VALUES (?, ?, ?)
+        ''', (recipe_id, num, step.get("instruction")))
+        step_id_by_number[num] = cursor.lastrowid
+
+    # 4. Wire the step graph
+    for step in steps:
+        num = _to_int(step.get("step_number"))
+        nxt = _to_int(step.get("next_step_number"))
+        if nxt is None or nxt not in step_id_by_number:
+            continue
+        cursor.execute('''
+            UPDATE recipe_steps SET next_step_id = ?
+            WHERE step_id = ?
+        ''', (step_id_by_number[nxt], step_id_by_number[num]))
+
+    # 5. Insert ingredients, linking each to the step where it's added
     for ing in recipe_data.get("recipe_ingredients", []):
         raw_name = ing.get("name")
         if not raw_name or not raw_name.strip():
@@ -242,28 +283,20 @@ def store_recipe_in_db(recipe_data: dict, db_path = DB_PATH) -> None:
             continue
         ingredient_id = row[0]
 
+        step_id = step_id_by_number.get(_to_int(ing.get("step_number")))
+
         cursor.execute('''
-            INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit, step_id)
+            VALUES (?, ?, ?, ?, ?)
         ''', (
             recipe_id,
             ingredient_id,
             ing.get("amount"),
-            ing.get("unit")
+            ing.get("unit"),
+            step_id
         ))
 
-    # 4. Insert Steps
-    for step in recipe_data.get("recipe_steps", []):
-        cursor.execute('''
-            INSERT INTO recipe_steps (recipe_id, step_number, instruction)
-            VALUES (?, ?, ?)
-        ''', (
-            recipe_id,
-            step.get("step_number"),
-            step.get("instruction")
-        ))
-
-    # 5. Insert Tags safely
+    # 6. Insert tags
     for tag in recipe_data.get("tags", []):
         raw_tag = tag.get("name")
         if not raw_tag or not raw_tag.strip():
