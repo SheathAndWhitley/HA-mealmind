@@ -34,13 +34,6 @@ CREATE TABLE recipe_ingredients (
     unit VARCHAR(50)
 );
 
-CREATE TABLE recipe_steps (
-    step_id SERIAL PRIMARY KEY,
-    recipe_id INT NOT NULL REFERENCES recipe_meta(recipe_id) ON DELETE CASCADE,
-    step_number INT NOT NULL,
-    instruction TEXT NOT NULL,
-    UNIQUE (recipe_id, step_number)
-);
 
 CREATE TABLE tags (
     tag_id SERIAL PRIMARY KEY,
