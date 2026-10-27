@@ -4,6 +4,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 import ollama
+from urllib.parse import urlsplit
 
 DB_PATH = "backend/src/db/recipes.db"
 
@@ -147,7 +148,9 @@ def scrape_with_llm(clean_content: str) -> dict:
     response = ollama.chat(
         model="hf.co/mistralai/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M", 
         format="json", 
-        messages=[{"role": "user", "content": PROMPT + clean_content}]
+        messages=[{"role": "user", "content": PROMPT + clean_content}],
+        options = {"num_predict": 4096, "temperature": 0.3, "num_ctx":8192},
+        keep_alive="30m"
     )
 
     #Converts response to a python readable dict
@@ -155,6 +158,10 @@ def scrape_with_llm(clean_content: str) -> dict:
     recipe_data = json.loads(json_string)
 
     return recipe_data
+
+def normalize_url(url: str) -> str:
+    parts = urlsplit(url.strip())
+    return f"{parts.scheme}://{parts.netloc.lower()}{parts.path.rstrip('/')}"
 
 def store_recipe_in_db(recipe_data: dict, db_path=DB_PATH) -> None:
     """Stores the normalized recipe data, including the step graph, in a SQLite database."""
@@ -330,13 +337,7 @@ def scrape_recipe(url: str) -> None:
     response = scrape_with_llm(clean_content)
     store_recipe_in_db(response)
 
-recipes_list = [
-    "https://www.modernhoney.com/chinese-orange-chicken/",
-    "https://simply-delicious-food.com/classic-cottage-pie/",
-    "https://norsktradisjonsmat.no/oppskrift/farikal/"
-]
+recipe_urls = ["https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe", "https://www.bbcgoodfood.com/recipes/air-fryer-pork-chops", "https://www.bbcgoodfood.com/recipes/healthy-beef-chow-mein", "https://www.bbcgoodfood.com/recipes/speedy-chorizo-ragu-lasagne", "https://www.bbcgoodfood.com/recipes/garlic-mushroom-flatbread-pizzas", "https://www.bbcgoodfood.com/recipes/pasta-purple-sprouting-broccoli-with-anchovies-garlic-preserved-lemon", "https://www.bbcgoodfood.com/recipes/10minute-couscous-salad", "https://www.bbcgoodfood.com/recipes/ginger-sesame-chilli-prawn-broccoli-stir-fry"]
 
-
-for recipe in recipes_list:
-    scrape_recipe(recipe)
-        
+for url in recipe_urls:
+    scrape_recipe(url)
