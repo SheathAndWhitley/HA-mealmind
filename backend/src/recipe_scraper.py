@@ -330,5 +330,13 @@ def scrape_recipe(url: str) -> None:
     response = scrape_with_llm(clean_content)
     store_recipe_in_db(response)
 
+recipes_list = [
+    "https://www.modernhoney.com/chinese-orange-chicken/",
+    "https://simply-delicious-food.com/classic-cottage-pie/",
+    "https://norsktradisjonsmat.no/oppskrift/farikal/"
+]
 
-scrape_recipe("https://www.bbcgoodfood.com/recipes/butternut-squash-sage-risotto")
+
+for recipe in recipes_list:
+    scrape_recipe(recipe)
+        
