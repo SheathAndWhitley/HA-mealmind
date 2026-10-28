@@ -163,7 +163,7 @@ def normalize_url(url: str) -> str:
     parts = urlsplit(url.strip())
     return f"{parts.scheme}://{parts.netloc.lower()}{parts.path.rstrip('/')}"
 
-def store_recipe_in_db(recipe_data: dict, db_path=DB_PATH) -> None:
+def store_recipe_in_db(normalized_url: str, recipe_data: dict, db_path=DB_PATH) -> None:
     """Stores the normalized recipe data, including the step graph, in a SQLite database."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -181,6 +181,7 @@ def store_recipe_in_db(recipe_data: dict, db_path=DB_PATH) -> None:
             cooktime_minutes INTEGER NOT NULL DEFAULT 0,
             continent TEXT,
             source TEXT,
+            source_url TEXT NOT NULL UNIQUE,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -234,10 +235,12 @@ def store_recipe_in_db(recipe_data: dict, db_path=DB_PATH) -> None:
     ''')
 
     # 2. Insert recipe metadata
+
     meta = recipe_data.get("recipe_meta", {})
     cursor.execute('''
-        INSERT INTO recipe_meta (title, description, servings, preptime_minutes, cooktime_minutes, continent, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO recipe_meta (title, description, servings, preptime_minutes, cooktime_minutes, continent, source, source_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_url) DO NOTHING
     ''', (
         meta.get("title"),
         meta.get("description"),
@@ -245,87 +248,90 @@ def store_recipe_in_db(recipe_data: dict, db_path=DB_PATH) -> None:
         meta.get("preptime_minutes", 0),
         meta.get("cooktime_minutes", 0),
         meta.get("continent"),
-        meta.get("source")
+        meta.get("source"),
+        normalized_url
     ))
-    recipe_id = cursor.lastrowid
 
-    # 3. Insert steps first, without edges, so every step_id exists
-    steps = [s for s in recipe_data.get("recipe_steps", []) if _to_int(s.get("step_number")) is not None]
-    step_id_by_number: dict[int, int] = {}
-    for step in steps:
-        num = _to_int(step.get("step_number"))
-        cursor.execute('''
-            INSERT INTO recipe_steps (recipe_id, step_number, instruction)
-            VALUES (?, ?, ?)
-        ''', (recipe_id, num, step.get("instruction")))
-        step_id_by_number[num] = cursor.lastrowid
+    if cursor.rowcount == 1:
+        recipe_id = cursor.lastrowid
+    
+        # 3. Insert steps first, without edges, so every step_id exists
+        steps = [s for s in recipe_data.get("recipe_steps", []) if _to_int(s.get("step_number")) is not None]
+        step_id_by_number: dict[int, int] = {}
+        for step in steps:
+            num = _to_int(step.get("step_number"))
+            cursor.execute('''
+                INSERT INTO recipe_steps (recipe_id, step_number, instruction)
+                VALUES (?, ?, ?)
+            ''', (recipe_id, num, step.get("instruction")))
+            step_id_by_number[num] = cursor.lastrowid
 
-    # 4. Wire the step graph
-    for step in steps:
-        num = _to_int(step.get("step_number"))
-        nxt = _to_int(step.get("next_step_number"))
-        if nxt is None or nxt not in step_id_by_number:
-            continue
-        cursor.execute('''
-            UPDATE recipe_steps SET next_step_id = ?
-            WHERE step_id = ?
-        ''', (step_id_by_number[nxt], step_id_by_number[num]))
+        # 4. Wire the step graph
+        for step in steps:
+            num = _to_int(step.get("step_number"))
+            nxt = _to_int(step.get("next_step_number"))
+            if nxt is None or nxt not in step_id_by_number:
+                continue
+            cursor.execute('''
+                UPDATE recipe_steps SET next_step_id = ?
+                WHERE step_id = ?
+            ''', (step_id_by_number[nxt], step_id_by_number[num]))
 
-    # 5. Insert ingredients, linking each to the step where it's added
-    for ing in recipe_data.get("recipe_ingredients", []):
-        raw_name = ing.get("name")
-        if not raw_name or not raw_name.strip():
-            continue
+        # 5. Insert ingredients, linking each to the step where it's added
+        for ing in recipe_data.get("recipe_ingredients", []):
+            raw_name = ing.get("name")
+            if not raw_name or not raw_name.strip():
+                continue
 
-        ing_name = raw_name.strip().lower()
+            ing_name = raw_name.strip().lower()
 
-        cursor.execute('''
-            INSERT INTO ingredients (name) VALUES (?)
-            ON CONFLICT(name) DO NOTHING
-        ''', (ing_name,))
+            cursor.execute('''
+                INSERT INTO ingredients (name) VALUES (?)
+                ON CONFLICT(name) DO NOTHING
+            ''', (ing_name,))
 
-        cursor.execute('SELECT ingredient_id FROM ingredients WHERE name = ?', (ing_name,))
-        row = cursor.fetchone()
-        if not row:
-            continue
-        ingredient_id = row[0]
+            cursor.execute('SELECT ingredient_id FROM ingredients WHERE name = ?', (ing_name,))
+            row = cursor.fetchone()
+            if not row:
+                continue
+            ingredient_id = row[0]
 
-        step_id = step_id_by_number.get(_to_int(ing.get("step_number")))
+            step_id = step_id_by_number.get(_to_int(ing.get("step_number")))
 
-        cursor.execute('''
-            INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit, step_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (
-            recipe_id,
-            ingredient_id,
-            ing.get("amount"),
-            ing.get("unit"),
-            step_id
-        ))
+            cursor.execute('''
+                INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit, step_id)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                recipe_id,
+                ingredient_id,
+                ing.get("amount"),
+                ing.get("unit"),
+                step_id
+            ))
 
-    # 6. Insert tags
-    for tag in recipe_data.get("tags", []):
-        raw_tag = tag.get("name")
-        if not raw_tag or not raw_tag.strip():
-            continue
+        # 6. Insert tags
+        for tag in recipe_data.get("tags", []):
+            raw_tag = tag.get("name")
+            if not raw_tag or not raw_tag.strip():
+                continue
 
-        tag_name = raw_tag.strip().lower()
+            tag_name = raw_tag.strip().lower()
 
-        cursor.execute('''
-            INSERT INTO tags (name, category) VALUES (?, ?)
-            ON CONFLICT(name) DO NOTHING
-        ''', (tag_name, tag.get("category")))
+            cursor.execute('''
+                INSERT INTO tags (name, category) VALUES (?, ?)
+                ON CONFLICT(name) DO NOTHING
+            ''', (tag_name, tag.get("category")))
 
-        cursor.execute('SELECT tag_id FROM tags WHERE name = ?', (tag_name,))
-        row = cursor.fetchone()
-        if not row:
-            continue
-        tag_id = row[0]
+            cursor.execute('SELECT tag_id FROM tags WHERE name = ?', (tag_name,))
+            row = cursor.fetchone()
+            if not row:
+                continue
+            tag_id = row[0]
 
-        cursor.execute('''
-            INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)
-            ON CONFLICT(recipe_id, tag_id) DO NOTHING
-        ''', (recipe_id, tag_id))
+            cursor.execute('''
+                INSERT INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)
+                ON CONFLICT(recipe_id, tag_id) DO NOTHING
+            ''', (recipe_id, tag_id))
 
     conn.commit()
     conn.close()
@@ -335,9 +341,13 @@ def scrape_recipe(url: str) -> None:
     """Orginization function to complete entire scrape to normalization"""
     clean_content = receive_and_clean(url)
     response = scrape_with_llm(clean_content)
-    store_recipe_in_db(response)
+    normalized_url = normalize_url(url)
+    store_recipe_in_db(normalized_url, response)
+
 
 recipe_urls = ["https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe", "https://www.bbcgoodfood.com/recipes/air-fryer-pork-chops", "https://www.bbcgoodfood.com/recipes/healthy-beef-chow-mein", "https://www.bbcgoodfood.com/recipes/speedy-chorizo-ragu-lasagne", "https://www.bbcgoodfood.com/recipes/garlic-mushroom-flatbread-pizzas", "https://www.bbcgoodfood.com/recipes/pasta-purple-sprouting-broccoli-with-anchovies-garlic-preserved-lemon", "https://www.bbcgoodfood.com/recipes/10minute-couscous-salad", "https://www.bbcgoodfood.com/recipes/ginger-sesame-chilli-prawn-broccoli-stir-fry"]
 
-for url in recipe_urls:
+recipe_urls_duplicates = ["https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe", "https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe" ]
+
+for url in recipe_urls_duplicates:
     scrape_recipe(url)

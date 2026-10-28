@@ -7,6 +7,7 @@ CREATE TABLE recipe_meta (
     cooktime_minutes INT NOT NULL,
     continent VARCHAR(100),
     source VARCHAR(255),
+    source_url VARCHAR(255) NOT NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
