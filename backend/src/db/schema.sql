@@ -34,7 +34,7 @@ CREATE TABLE recipe_ingredients (
     step_id INT REFERENCES recipe_steps(step_id) ON DELETE CASCADE, 
     amount DECIMAL(6, 2),
     unit VARCHAR(50),
-    prep_method VARCHAR(100),
+    prep_method VARCHAR(100)
 );
 
 

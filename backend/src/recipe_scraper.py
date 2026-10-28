@@ -299,15 +299,17 @@ def store_recipe_in_db(normalized_url: str, recipe_data: dict, db_path=DB_PATH) 
             step_id = step_id_by_number.get(_to_int(ing.get("step_number")))
 
             cursor.execute('''
-                INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit, step_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit, prep_method, step_id)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 recipe_id,
                 ingredient_id,
                 ing.get("amount"),
                 ing.get("unit"),
+                ing.get("prep_method"),
                 step_id
             ))
+
 
         # 6. Insert tags
         for tag in recipe_data.get("tags", []):
