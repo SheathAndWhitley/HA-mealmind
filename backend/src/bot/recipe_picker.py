@@ -18,17 +18,15 @@ def random_dinners():
     for row in recipes:
         dict_recipes.append(dict(row))
 
+    conn.close()
+
     return dict_recipes
 
-meta_recipes = random_dinners()
+def bot_options_message(random_dinners_dict):
+    option_message = "Good morning! Here are your dinner options:\n\n"
 
-for line in meta_recipes:
-    print(f"{line}\n")
-
-def bot_options_message():
-    recipe_options = random_dinners
-
-    option_messages = []
-    for recipe in recipe_options:
-        title = recipe_options["title"]
-        description = recipe_options["description"]
+    for index, recipe in enumerate(random_dinners_dict, start=1):
+        recipe_message = f"Option {index}, {recipe['title']}\nDescription: {recipe['description']}\nPrep time: {recipe['preptime_minutes']} minutes\nCook time: {recipe['cooktime_minutes']} minutes\nContinent: {recipe['continent']}\n\n"
+        option_message += recipe_message
+    
+    return option_message

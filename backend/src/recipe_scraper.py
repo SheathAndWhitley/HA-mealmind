@@ -349,7 +349,5 @@ def scrape_recipe(url: str) -> None:
 
 recipe_urls = ["https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe", "https://www.bbcgoodfood.com/recipes/air-fryer-pork-chops", "https://www.bbcgoodfood.com/recipes/healthy-beef-chow-mein", "https://www.bbcgoodfood.com/recipes/speedy-chorizo-ragu-lasagne", "https://www.bbcgoodfood.com/recipes/garlic-mushroom-flatbread-pizzas", "https://www.bbcgoodfood.com/recipes/pasta-purple-sprouting-broccoli-with-anchovies-garlic-preserved-lemon", "https://www.bbcgoodfood.com/recipes/10minute-couscous-salad", "https://www.bbcgoodfood.com/recipes/ginger-sesame-chilli-prawn-broccoli-stir-fry"]
 
-recipe_urls_duplicates = ["https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe", "https://www.bbcgoodfood.com/recipes/gnocchi-cacio-e-pepe" ]
-
-for url in recipe_urls_duplicates:
+for url in recipe_urls:
     scrape_recipe(url)
