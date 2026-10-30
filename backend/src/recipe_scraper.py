@@ -26,7 +26,7 @@ PROMPT = """
             "name": "String (lowercase, base generic ingredient)",
             "amount": "Float or null",
             "unit": "g | kg | ml | l | tsp | tbsp | whole | clove | pinch | null",
-            "step_number": "Integer or null (the step_number where this ingredient is first added)"
+            "step_number": "Integer or null (the step_number where this ingredient is first added)",
             "prep_method": "String or null (e.g., 'chopped', 'sliced', 'diced', 'minced')"
             }
         ],
@@ -34,7 +34,7 @@ PROMPT = """
             {
             "step_number": 1,
             "instruction": "String",
-            "next_step_number": "Integer or null (the step_number this step feeds into; null for the final step(s))"
+            "next_step_number": "Integer or null (the step_number this step feeds into; null for the final step(s))",
             "duration_text": "String or null (e.g., '20 minutes', '5-10 minutes', '~30 minutes')"
             }
         ],
@@ -261,9 +261,9 @@ def store_recipe_in_db(normalized_url: str, recipe_data: dict, db_path=DB_PATH) 
         for step in steps:
             num = _to_int(step.get("step_number"))
             cursor.execute('''
-                INSERT INTO recipe_steps (recipe_id, step_number, instruction)
-                VALUES (?, ?, ?)
-            ''', (recipe_id, num, step.get("instruction")))
+                INSERT INTO recipe_steps (recipe_id, step_number, instruction, duration_text)
+                VALUES (?, ?, ?, ?)
+            ''', (recipe_id, num, step.get("instruction"), step.get("duration_text")))
             step_id_by_number[num] = cursor.lastrowid
 
         # 4. Wire the step graph
