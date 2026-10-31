@@ -12,7 +12,7 @@ if not bot_token:
 
 bot = telebot.TeleBot(token=bot_token, parse_mode="HTML")  # Set parse_mode to HTML for formatting
 
-offered_options_index = []  # Global variable to store the offered options db index
+offered_options_index = []  # stores recipe_id for db
 
 @bot.message_handler(commands=["greet"])
 def start(message):
@@ -29,23 +29,34 @@ def help(message):
 		"/pick - Pick one of the dinner options.\n"
 	)
 	bot.send_message(chat_id=message.chat.id, text=help_message)
-
+    
 @bot.message_handler(commands=["dinner"])
 def dinner(message):
-	dinner_suggestion = random_dinners()
-	db_recipe_index, suggestion_message = bot_options_message(dinner_suggestion)
-	offered_options_index = db_recipe_index  # Storing offered options globally so they can be called in /pick
-	bot.send_message(chat_id=message.chat.id, text=suggestion_message)
+    global offered_options_index
+    dinner_suggestion = random_dinners()
+    db_recipe_index, suggestion_message = bot_options_message(dinner_suggestion)
+    offered_options_index = db_recipe_index
+    bot.send_message(chat_id=message.chat.id, text=suggestion_message)
 
 @bot.message_handler(commands=["pick"])
 def pick(message):
+    if len(offered_options_index) < 3:
+        bot.send_message(message.chat.id, "Use /dinner first to get some options.")
+        return
+
     kb = telebot.types.InlineKeyboardMarkup()
     kb.add(
-        telebot.types.InlineKeyboardButton("Option 1", callback_data=offered_options_index[0]),
-        telebot.types.InlineKeyboardButton("Option 2", callback_data=offered_options_index[1]),
-        telebot.types.InlineKeyboardButton("Option 3", callback_data=offered_options_index[2])
+        telebot.types.InlineKeyboardButton("Option 1", callback_data=str(offered_options_index[0])),
+        telebot.types.InlineKeyboardButton("Option 2", callback_data=str(offered_options_index[1])),
+        telebot.types.InlineKeyboardButton("Option 3", callback_data=str(offered_options_index[2])),
     )
     bot.send_message(message.chat.id, "Pick one:", reply_markup=kb)
-	
+
+@bot.callback_query_handler(func=lambda call: True)
+def on_recipe(call):
+    bot.answer_callback_query(call.id)
+    recipe_id = int(call.data)
+    # TODO: Return engineering recipe for the selected recipe_id
+    bot.send_message(call.message.chat.id, f"That recipes db_index is {recipe_id}")
 
 bot.polling()
