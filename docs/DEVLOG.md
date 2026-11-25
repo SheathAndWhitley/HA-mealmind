@@ -46,3 +46,6 @@
 - Added `recipe_lists/bbc_good_food_dinners.md` (225 dinner URLs in 10 categories; 67 from the
   original list, the rest unverified) and URL-list import: `--file` on the CLI and
   "Import from file" in the web UI (background job with progress page).
+- Web UI: Normal/Engineering toggle in the top bar. Engineering view shows the recipe as a
+  "Cooking for Engineers" table (ingredients left, each step spanning what it combines),
+  built from the step graph, or from step sections/order when there is no graph.

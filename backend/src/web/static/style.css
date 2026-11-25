@@ -97,3 +97,22 @@ label small { font-weight: 400; }
 .log-skip .tag { color: var(--muted); }
 .log-failed .tag { color: var(--danger); }
 @media (max-width: 820px) { .add-grid > section:nth-child(3) { grid-column: auto; grid-row: auto; } }
+
+/* layout toggle */
+.toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; background: var(--bg); }
+.toggle a { padding: 4px 12px; border-radius: 999px; font-size: .85rem; color: var(--muted); }
+.toggle a.on { background: var(--accent); color: var(--card); font-weight: 600; }
+@media (max-width: 600px) { .topbar { flex-wrap: wrap; gap: 10px; } .topbar nav { flex-wrap: wrap; } }
+
+/* engineering recipe table */
+.eng-wrap { overflow-x: auto; margin-top: 18px; }
+.eng { border-collapse: collapse; font-size: .9rem; min-width: 100%; }
+.eng td { border: 2px solid var(--accent); padding: 6px 8px; vertical-align: middle; }
+.eng-banner { text-align: center; font-weight: 600; }
+.eng-ing { white-space: nowrap; min-width: 140px; }
+.eng-op { text-align: center; min-width: 110px; max-width: 200px; cursor: help; }
+.eng-prep { color: var(--muted); font-style: italic; min-width: 90px; }
+.eng-op .pill { display: inline-block; margin-top: 3px; }
+.eng-blank { background: transparent; }
+.eng-steps { margin-top: 18px; }
+.eng-steps summary { cursor: pointer; color: var(--accent); font-weight: 600; margin-bottom: 10px; }

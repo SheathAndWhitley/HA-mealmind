@@ -20,6 +20,40 @@
   </div>
   {% endif %}
 
+  {% if table %}
+  <div class="eng-wrap">
+    <table class="eng">
+      {% if table.banner %}
+      <tr><td class="eng-banner" colspan="{{ table.columns }}">{{ table.banner }}</td></tr>
+      {% endif %}
+      {% for row in table.rows %}
+      <tr>
+        {% for c in row %}
+        {% if c.kind == 'blank' %}
+        <td class="eng-blank" rowspan="{{ c.rowspan }}" colspan="{{ c.colspan }}"></td>
+        {% elif c.kind == 'empty' %}
+        <td class="eng-ing" rowspan="{{ c.rowspan }}"></td>
+        {% elif c.kind == 'ingredient' %}
+        <td class="eng-ing" rowspan="{{ c.rowspan }}" {% if c.full %}title="{{ c.full }}"{% endif %}>{{ c.text }}</td>
+        {% elif c.kind == 'prep' %}
+        <td class="eng-op eng-prep" rowspan="{{ c.rowspan }}">{{ c.text }}</td>
+        {% else %}
+        <td class="eng-op" rowspan="{{ c.rowspan }}" title="{{ c.number }}. {{ c.full }}">
+          {{ c.text }}{% if c.duration %} <span class="pill">{{ c.duration }}</span>{% endif %}
+        </td>
+        {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <details class="eng-steps">
+    <summary>Full method</summary>
+    <ol class="steps">
+      {% for s in steps %}<li value="{{ s.step_number }}">{{ s.instruction }}</li>{% endfor %}
+    </ol>
+  </details>
+  {% else %}
   <div class="columns">
     <section>
       <h2>Ingredients</h2>
@@ -49,6 +83,8 @@
       </ol>
     </section>
   </div>
+
+  {% endif %}
 
   <footer class="recipe-footer">
     <span class="muted">

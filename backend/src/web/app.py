@@ -15,11 +15,14 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import (Flask, abort, flash, make_response, redirect, render_template, request,
+                   url_for)
 
 # recipe_scraper.py lives one folder up (backend/src)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import recipe_scraper  # noqa: E402
+
+import engineering  # noqa: E402  (same folder as this file)
 
 DB_PATH = recipe_scraper.DB_PATH
 MAX_URLS_PER_SUBMIT = 10
@@ -59,6 +62,38 @@ def format_amount(value) -> str:
         return ""
     value = round(float(value), 2)
     return str(int(value)) if value.is_integer() else f"{value:g}"
+
+
+VIEWS = ("normal", "engineering")
+
+
+def current_view() -> str:
+    view = request.cookies.get("view", "normal")
+    return view if view in VIEWS else "normal"
+
+
+@app.context_processor
+def inject_view():
+    return {"view": current_view()}
+
+
+@app.get("/view/<mode>")
+def set_view(mode: str):
+    """Switch between normal and engineering recipe layout (remembered in a cookie)."""
+    target = request.args.get("next") or url_for("index")
+    if not target.startswith("/"):  # only redirect within this site
+        target = url_for("index")
+    response = make_response(redirect(target))
+    if mode in VIEWS:
+        response.set_cookie("view", mode, max_age=365 * 24 * 3600, samesite="Lax")
+    return response
+
+
+def format_qty(amount, unit) -> str:
+    qty = format_amount(amount)
+    if unit and unit != "whole":
+        qty = f"{qty} {unit}".strip()
+    return qty
 
 
 @app.template_filter("cap")
@@ -115,12 +150,14 @@ def recipe(recipe_id: int):
         if meta is None:
             abort(404)
         ingredients = conn.execute("""
-            SELECT i.name, ri.amount, ri.unit, ri.prep_method, ri.original_text, ri.group_name
+            SELECT i.name, ri.amount, ri.unit, ri.prep_method, ri.original_text, ri.group_name,
+                   ri.step_id
             FROM recipe_ingredients ri JOIN ingredients i ON i.ingredient_id = ri.ingredient_id
             WHERE ri.recipe_id = ? ORDER BY ri.recipe_ingredient_id
         """, (recipe_id,)).fetchall()
         steps = conn.execute("""
-            SELECT step_number, instruction, duration_text, section FROM recipe_steps
+            SELECT step_id, step_number, instruction, duration_text, section, next_step_id
+            FROM recipe_steps
             WHERE recipe_id = ? ORDER BY step_number
         """, (recipe_id,)).fetchall()
         tags = conn.execute("""
@@ -128,8 +165,12 @@ def recipe(recipe_id: int):
             WHERE rt.recipe_id = ? ORDER BY t.category, t.name
         """, (recipe_id,)).fetchall()
     source_is_link = meta["source_url"].startswith(("http://", "https://"))
+    table = None
+    if current_view() == "engineering":
+        table = engineering.build_table([dict(s) for s in steps],
+                                        [dict(i) for i in ingredients], format_qty)
     return render_template("recipe.html", meta=meta, ingredients=ingredients, steps=steps,
-                           tags=tags, source_is_link=source_is_link)
+                           tags=tags, source_is_link=source_is_link, table=table)
 
 
 @app.post("/recipe/<int:recipe_id>/delete")

@@ -10,6 +10,10 @@
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}">MealMind</a>
     <nav>
+      <div class="toggle" role="group" aria-label="Recipe layout">
+        <a class="{{ 'on' if view == 'normal' }}" href="{{ url_for('set_view', mode='normal', next=request.full_path) }}">Normal</a>
+        <a class="{{ 'on' if view == 'engineering' }}" href="{{ url_for('set_view', mode='engineering', next=request.full_path) }}">Engineering</a>
+      </div>
       <a href="{{ url_for('index') }}">Recipes</a>
       <a class="button" href="{{ url_for('add') }}">+ Add recipe</a>
     </nav>

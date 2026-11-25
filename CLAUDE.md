@@ -65,7 +65,9 @@ python -m py_compile backend/src/bot/*.py backend/src/*.py   # quick syntax chec
 - `backend/src/web/` — web UI (`app.py`, `templates/`, `static/style.css`): browse/search
   recipes, view one, add by URL (reuses the scraper), by uploading a .txt/.md file of URLs
   (background import with a progress page, one import at a time, state kept in memory),
-  or by hand; delete. No login.
+  or by hand; delete. No login. A Normal/Engineering toggle (cookie `view`) switches the
+  recipe page to a "Cooking for Engineers" table built by `web/engineering.py` from the step
+  graph (`next_step_id`) or, if missing, from step sections / step order.
 - `Dockerfile`, `docker-compose.yml` — one image, two services: `bot` and `web`
   (`network_mode: host`, shared `backend/src/db` volume). Runtime deps in `requirements-app.txt`.
 - `backend/src/db/recipes.db` — data. `schema.sql` is out of date (Postgres syntax); the
