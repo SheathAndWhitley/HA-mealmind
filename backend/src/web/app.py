@@ -9,6 +9,8 @@ No login: keep it on the home network / Tailscale, never expose it publicly.
 import os
 import sqlite3
 import sys
+import threading
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -21,6 +23,7 @@ import recipe_scraper  # noqa: E402
 
 DB_PATH = recipe_scraper.DB_PATH
 MAX_URLS_PER_SUBMIT = 10
+MAX_URLS_PER_FILE = 1000
 
 app = Flask(__name__)
 
@@ -228,6 +231,85 @@ def add_manual():
         conn.close()
     flash(f"Added “{title}”.", "ok")
     return redirect(url_for("recipe", recipe_id=recipe_id))
+
+
+# --------------------------------------------------------------------------- #
+# Import a file of URLs (runs in the background, progress page polls)
+# --------------------------------------------------------------------------- #
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _running_job() -> str | None:
+    with _jobs_lock:
+        for job_id, job in _jobs.items():
+            if not job["finished"]:
+                return job_id
+    return None
+
+
+def _run_import(job_id: str, urls: list[str]) -> None:
+    job = _jobs[job_id]
+
+    def on_result(status, url, detail):
+        with _jobs_lock:
+            job["counts"][status] += 1
+            job["done"] += 1
+            if status != "known":
+                job["log"].insert(0, {"status": status, "url": url, "detail": detail})
+
+    try:
+        recipe_scraper.scrape_urls(urls, DB_PATH, on_result)
+    except Exception as e:
+        with _jobs_lock:
+            job["error"] = f"{type(e).__name__}: {e}"
+    finally:
+        with _jobs_lock:
+            job["finished"] = time.time()
+
+
+@app.post("/add/file")
+def add_from_file():
+    if (running := _running_job()) is not None:
+        flash("An import is already running.", "info")
+        return redirect(url_for("import_status", job_id=running))
+
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        flash("Choose a .txt or .md file with recipe URLs.", "error")
+        return redirect(url_for("add"))
+    try:
+        text = upload.read().decode("utf-8", errors="replace")
+    except Exception:
+        flash("Could not read that file.", "error")
+        return redirect(url_for("add"))
+
+    urls = recipe_scraper.extract_urls(text)[:MAX_URLS_PER_FILE]
+    if not urls:
+        flash("No http(s) URLs found in that file.", "error")
+        return redirect(url_for("add"))
+
+    job_id = uuid.uuid4().hex[:8]
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "filename": upload.filename, "total": len(urls), "done": 0, "started": time.time(),
+            "finished": None, "error": None, "log": [],
+            "counts": {"known": 0, "ok": 0, "skip": 0, "failed": 0},
+        }
+    threading.Thread(target=_run_import, args=(job_id, urls), daemon=True).start()
+    return redirect(url_for("import_status", job_id=job_id))
+
+
+@app.get("/import/<job_id>")
+def import_status(job_id: str):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            abort(404)
+        snapshot = {**job, "counts": dict(job["counts"]), "log": list(job["log"])}
+    elapsed = (snapshot["finished"] or time.time()) - snapshot["started"]
+    return render_template("import.html", job=snapshot, job_id=job_id, elapsed=int(elapsed))
 
 
 if __name__ == "__main__":

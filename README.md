@@ -20,6 +20,7 @@ pip install -r requirements.txt
 # Scrape recipes into backend/src/db/recipes.db (URLs in backend/src/recipe_urls.txt)
 python backend/src/recipe_scraper.py
 python backend/src/recipe_scraper.py https://www.bbcgoodfood.com/recipes/<slug>   # one-off
+python backend/src/recipe_scraper.py --file recipe_lists/bbc_good_food_dinners.md  # a URL list
 
 # Run the bot (needs TELEGRAM_BOT_TOKEN in .env, and Ollama for profiled users)
 python backend/src/bot/bot.py
@@ -33,6 +34,12 @@ python backend/src/web/app.py
 ```bash
 cp .env.example .env      # fill in TELEGRAM_BOT_TOKEN
 docker compose up -d --build
+```
+
+Scrape a URL list inside Docker (one-off container, doesn't start a second bot):
+
+```bash
+docker compose run --rm bot python backend/src/recipe_scraper.py --file recipe_lists/bbc_good_food_dinners.md
 ```
 
 Starts two containers from one image: `mealmind-bot` and `mealmind-web`

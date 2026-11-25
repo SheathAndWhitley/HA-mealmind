@@ -17,6 +17,7 @@ Fetching runs in parallel; parsing and DB writes run in the main thread.
 Usage (from the repo root):
     python backend/src/recipe_scraper.py                  # URLs from recipe_urls.txt
     python backend/src/recipe_scraper.py URL [URL ...]    # specific URLs
+    python backend/src/recipe_scraper.py --file PATH      # every URL in a .txt/.md file
 """
 
 import re
@@ -421,29 +422,62 @@ def store_recipe_in_db(conn: sqlite3.Connection, normalized_url: str, recipe_dat
 # Orchestration
 # --------------------------------------------------------------------------- #
 
+URL_RE = re.compile(r"https?://[^\s<>\"'`)\]]+")
+
+
+def extract_urls(text: str) -> list[str]:
+    """All http(s) URLs in a text/markdown/CSV file, in order, without duplicates.
+
+    Lines starting with # (comments in .txt files) are ignored; markdown headings
+    contain no URLs, so they're skipped naturally.
+    """
+    urls, seen = [], set()
+    for line in text.splitlines():
+        if line.lstrip().startswith("#") and "://" in line:
+            continue
+        for match in URL_RE.findall(line):
+            url = match.rstrip(".,;:*_")
+            key = normalize_url(url)
+            if key not in seen:
+                seen.add(key)
+                urls.append(url)
+    return urls
+
+
 def load_urls(args: list[str]) -> list[str]:
+    """URLs from the command line: `--file PATH` (any text/markdown file) or URLs."""
+    if args[:1] == ["--file"]:
+        if len(args) < 2:
+            raise SystemExit("usage: recipe_scraper.py --file PATH")
+        return extract_urls(Path(args[1]).read_text(encoding="utf-8"))
     if args:
         return args
-    lines = URLS_FILE.read_text(encoding="utf-8").splitlines()
-    return [l.strip() for l in lines if l.strip() and not l.lstrip().startswith("#")]
+    return extract_urls(URLS_FILE.read_text(encoding="utf-8"))
 
 
-def scrape_all(urls: list[str], db_path: str = DB_PATH) -> None:
-    start = time.time()
+def scrape_urls(urls: list[str], db_path: str = DB_PATH, on_result=None) -> dict:
+    """Scrape URLs into the DB and return counts.
+
+    on_result(status, url, detail) is called for every URL, where status is one of
+    "known" (already in DB), "ok", "skip" (no recipe data) or "failed".
+    """
+    report = on_result or (lambda status, url, detail: None)
+    counts = {"total": len(urls), "known": 0, "ok": 0, "skip": 0, "failed": 0}
+
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON;")
-    ensure_schema(conn)
-
-    known = {row[0] for row in conn.execute("SELECT source_url FROM recipe_meta")}
-    todo = {}
-    for url in urls:
-        normalized = normalize_url(url)
-        if normalized not in known:
-            todo.setdefault(normalized, url)
-    print(f"{len(urls)} URLs, {len(urls) - len(todo)} already in DB, scraping {len(todo)}", flush=True)
-
-    stored = skipped = failed = 0
     try:
+        ensure_schema(conn)
+        known = {row[0] for row in conn.execute("SELECT source_url FROM recipe_meta")}
+        todo = {}
+        for url in urls:
+            normalized = normalize_url(url)
+            if normalized in known or normalized in todo:
+                counts["known"] += 1
+                report("known", url, None)
+            else:
+                todo[normalized] = url
+
         with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
             futures = {pool.submit(extract_recipe, url): (norm, url) for norm, url in todo.items()}
             for future in as_completed(futures):
@@ -451,25 +485,35 @@ def scrape_all(urls: list[str], db_path: str = DB_PATH) -> None:
                 try:
                     raw = future.result()
                     if raw is None:
-                        skipped += 1
-                        print(f"  SKIP   {url} (no recipe data found)", flush=True)
-                        continue
-                    if store_recipe_in_db(conn, normalized, to_recipe_data(raw)) is not None:
-                        stored += 1
-                        print(f"  OK     {url}", flush=True)
+                        status, detail = "skip", "no recipe data found"
+                    elif store_recipe_in_db(conn, normalized, to_recipe_data(raw)) is not None:
+                        status, detail = "ok", raw["title"]
                     else:
-                        skipped += 1
+                        status, detail = "known", None
                 except FetchError as e:
-                    failed += 1
-                    print(f"  FAILED {url}: {e}", flush=True)
+                    status, detail = "failed", str(e)
                 except Exception as e:
-                    failed += 1
-                    print(f"  FAILED {url}: {type(e).__name__}: {e}", flush=True)
+                    status, detail = "failed", f"{type(e).__name__}: {e}"
+                counts[status] += 1
+                report(status, url, detail)
     finally:
         conn.close()
+    return counts
 
-    print(f"Done in {time.time() - start:.1f}s: {stored} stored, {skipped} skipped, {failed} failed",
-          flush=True)
+
+def scrape_all(urls: list[str], db_path: str = DB_PATH) -> None:
+    """Command-line wrapper around scrape_urls that prints progress."""
+    start = time.time()
+    labels = {"ok": "OK    ", "skip": "SKIP  ", "failed": "FAILED"}
+
+    def show(status, url, detail):
+        if status in labels:
+            print(f"  {labels[status]} {url}" + (f" ({detail})" if detail else ""), flush=True)
+
+    print(f"Scraping {len(urls)} URLs...", flush=True)
+    c = scrape_urls(urls, db_path, show)
+    print(f"Done in {time.time() - start:.1f}s: {c['ok']} stored, {c['known']} already in DB, "
+          f"{c['skip']} skipped, {c['failed']} failed", flush=True)
 
 
 if __name__ == "__main__":

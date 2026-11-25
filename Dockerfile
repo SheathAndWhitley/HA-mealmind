@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements-app.txt \
  && python -c "import nltk; nltk.download('averaged_perceptron_tagger_eng', download_dir='/usr/local/share/nltk_data', quiet=True)"
 
 COPY backend/ backend/
+COPY recipe_lists/ recipe_lists/
 
 # Default: the Telegram bot. The web service overrides this in docker-compose.yml.
 CMD ["python", "backend/src/bot/bot.py"]

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Import · MealMind{% endblock %}
+{% block content %}
+{% if not job.finished %}<meta http-equiv="refresh" content="2">{% endif %}
+<h1>Importing {{ job.filename }}</h1>
+{% set pct = (100 * job.done / job.total)|round|int if job.total else 100 %}
+<div class="progress"><div style="width: {{ pct }}%"></div></div>
+<p class="muted">
+  {{ job.done }} of {{ job.total }} URLs · {{ elapsed }}s
+  {% if job.finished %}· <strong>finished</strong>{% else %}· working… (this page refreshes itself){% endif %}
+</p>
+
+<div class="stats">
+  <div><span>Added</span>{{ job.counts.ok }}</div>
+  <div><span>Already in DB</span>{{ job.counts.known }}</div>
+  <div><span>No recipe data</span>{{ job.counts.skip }}</div>
+  <div><span>Failed</span>{{ job.counts.failed }}</div>
+</div>
+
+{% if job.error %}<div class="flash flash-error">Import stopped: {{ job.error }}</div>{% endif %}
+{% if job.finished %}<p><a class="button" href="{{ url_for('index') }}">View recipes</a></p>{% endif %}
+
+{% if job.log %}
+<h2>Log</h2>
+<ul class="log">
+  {% for entry in job.log %}
+  <li class="log-{{ entry.status }}">
+    <span class="tag">{{ {'ok': 'added', 'skip': 'skipped', 'failed': 'failed'}[entry.status] }}</span>
+    <span class="url">{{ entry.url }}</span>
+    {% if entry.detail %}<span class="muted">— {{ entry.detail }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

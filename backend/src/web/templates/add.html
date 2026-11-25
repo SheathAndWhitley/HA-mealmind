@@ -14,6 +14,16 @@
   </section>
 
   <section class="panel">
+    <h2>Import from file</h2>
+    <p class="muted">Upload a .txt or .md file. Every http(s) URL in it is scraped in the
+      background; URLs already in the database are skipped.</p>
+    <form method="post" action="{{ url_for('add_from_file') }}" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".txt,.md,.markdown,.csv,text/plain,text/markdown" required>
+      <button type="submit">Start import</button>
+    </form>
+  </section>
+
+  <section class="panel">
     <h2>By hand</h2>
     <form method="post" action="{{ url_for('add_manual') }}" class="manual">
       <label>Title <input name="title" required value="{{ form.title }}"></label>

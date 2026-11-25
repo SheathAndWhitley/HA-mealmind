@@ -39,6 +39,7 @@ Run everything from the **repo root** (paths are cwd-relative).
 source .venv/bin/activate
 python backend/src/recipe_scraper.py              # scrape URLs in backend/src/recipe_urls.txt
 python backend/src/recipe_scraper.py URL [URL…]   # scrape specific URLs
+python backend/src/recipe_scraper.py --file recipe_lists/bbc_good_food_dinners.md  # URLs in any .txt/.md
 python backend/src/bot/bot.py                     # run the bot
 python backend/src/web/app.py                     # web UI on http://localhost:8099
 docker compose up -d --build                      # bot + web UI in Docker
@@ -54,13 +55,17 @@ python -m py_compile backend/src/bot/*.py backend/src/*.py   # quick syntax chec
   redirects), rotates browser fingerprints on bot blocks, timeouts and a 5 MB size cap.
 - `backend/src/scraper_clean.py` — cleaning for messy schema.org data (HTML/entities,
   HowToSections, ISO durations, yields, keywords, images, ingredient groups).
-- `backend/src/recipe_urls.txt` — URLs to scrape, one per line, `#` for comments.
+- `backend/src/recipe_urls.txt` — default URLs to scrape, one per line, `#` for comments.
+- `recipe_lists/*.md` — larger URL lists (e.g. 225 BBC Good Food dinners, partly unverified).
+  `extract_urls()` pulls every http(s) URL out of any text/markdown file.
 - `backend/src/bot/bot.py` — Telegram handlers (`/dinner`, `/pick`, reroll). In-memory state
   keyed by `(chat_id, user_id)`.
 - `backend/src/bot/recipe_picker.py` — DB queries, profile lookup, hard-rule ingredient filter,
   LLM fit check, recipe HTML formatting.
 - `backend/src/web/` — web UI (`app.py`, `templates/`, `static/style.css`): browse/search
-  recipes, view one, add by URL (reuses the scraper) or by hand, delete. No login.
+  recipes, view one, add by URL (reuses the scraper), by uploading a .txt/.md file of URLs
+  (background import with a progress page, one import at a time, state kept in memory),
+  or by hand; delete. No login.
 - `Dockerfile`, `docker-compose.yml` — one image, two services: `bot` and `web`
   (`network_mode: host`, shared `backend/src/db` volume). Runtime deps in `requirements-app.txt`.
 - `backend/src/db/recipes.db` — data. `schema.sql` is out of date (Postgres syntax); the

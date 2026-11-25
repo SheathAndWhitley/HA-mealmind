@@ -43,3 +43,6 @@
   - `scraper_clean.py`: HTML/entity cleanup, HowToSections, ISO durations, yields, keywords.
   - New columns: recipe image, step sections, ingredient groups, original ingredient line.
     Added automatically to existing DBs. Web UI shows images, sections and groups.
+- Added `recipe_lists/bbc_good_food_dinners.md` (225 dinner URLs in 10 categories; 67 from the
+  original list, the rest unverified) and URL-list import: `--file` on the CLI and
+  "Import from file" in the web UI (background job with progress page).
