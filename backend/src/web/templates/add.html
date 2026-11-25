@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Add recipe · MealMind{% endblock %}
+{% block content %}
+{% set form = form or {} %}
+<h1>Add recipes</h1>
+<div class="add-grid">
+  <section class="panel">
+    <h2>From a website</h2>
+    <p class="muted">Paste one URL per line (max 10). Works for most recipe sites, e.g. BBC Good Food.</p>
+    <form method="post" action="{{ url_for('add_by_url') }}" onsubmit="this.querySelector('button').textContent='Scraping…'">
+      <textarea name="urls" rows="6" placeholder="https://www.bbcgoodfood.com/recipes/…"></textarea>
+      <button type="submit">Scrape and add</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>By hand</h2>
+    <form method="post" action="{{ url_for('add_manual') }}" class="manual">
+      <label>Title <input name="title" required value="{{ form.title }}"></label>
+      <label>Short description <input name="description" value="{{ form.description }}"></label>
+      <div class="row">
+        <label>Prep (min) <input name="prep" type="number" min="0" value="{{ form.prep }}"></label>
+        <label>Cook (min) <input name="cook" type="number" min="0" value="{{ form.cook }}"></label>
+        <label>Serves <input name="servings" type="number" min="0" value="{{ form.servings }}"></label>
+      </div>
+      <div class="row">
+        <label>Cuisine <input name="cuisine" placeholder="italian" value="{{ form.cuisine }}"></label>
+        <label>Meal type <input name="category" placeholder="dinner" value="{{ form.category }}"></label>
+      </div>
+      <label>Image URL <input name="image" type="url" placeholder="https://… (optional)" value="{{ form.image }}"></label>
+      <label>Tags <input name="tags" placeholder="vegetarian, quick" value="{{ form.tags }}"></label>
+      <label>Ingredients <small class="muted">one per line, e.g. “200g basmati rice”</small>
+        <textarea name="ingredients" rows="6" required>{{ form.ingredients }}</textarea></label>
+      <label>Steps <small class="muted">one per line</small>
+        <textarea name="steps" rows="6" required>{{ form.steps }}</textarea></label>
+      <button type="submit">Save recipe</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

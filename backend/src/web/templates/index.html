@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<form class="search" method="get" action="{{ url_for('index') }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search title or ingredient…" autofocus>
+  {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+  <button type="submit">Search</button>
+</form>
+
+<div class="chips">
+  {% for t in top_tags %}
+    <a class="chip {% if t.name == tag %}active{% endif %}"
+       href="{{ url_for('index', tag=None if t.name == tag else t.name, q=q or None) }}">{{ t.name }}</a>
+  {% endfor %}
+</div>
+
+<p class="muted">
+  {{ recipes|length }} of {{ total }} recipes
+  {% if q or tag %}· <a href="{{ url_for('index') }}">clear filters</a>{% endif %}
+</p>
+
+{% if recipes %}
+<div class="grid">
+  {% for r in recipes %}
+  <a class="card" href="{{ url_for('recipe', recipe_id=r.recipe_id) }}">
+    {% if r.image_url %}<img class="thumb" src="{{ r.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+    <h2>{{ r.title|cap }}</h2>
+    {% if r.description %}<p class="desc">{{ r.description }}</p>{% endif %}
+    <p class="meta">
+      ⏱ {{ r.preptime_minutes + r.cooktime_minutes }} min
+      {% if r.servings %} · 🍽 {{ r.servings }}{% endif %}
+      {% if r.continent %} · {{ r.continent|cap }}{% endif %}
+    </p>
+    {% if r.tags %}
+    <div class="chips small">
+      {% for t in r.tags.split('|')[:4] %}<span class="chip">{{ t }}</span>{% endfor %}
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">No recipes found. <a href="{{ url_for('add') }}">Add one?</a></p>
+{% endif %}
+{% endblock %}

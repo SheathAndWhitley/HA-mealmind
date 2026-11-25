@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.title|cap }} · MealMind{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">← All recipes</a>
+<article class="recipe">
+  {% if meta.image_url %}<img class="hero" src="{{ meta.image_url }}" alt="" referrerpolicy="no-referrer">{% endif %}
+  <h1>{{ meta.title|cap }}</h1>
+  {% if meta.description %}<p class="lead">{{ meta.description }}</p>{% endif %}
+
+  <div class="facts">
+    <div><span>Prep</span>{{ meta.preptime_minutes }} min</div>
+    <div><span>Cook</span>{{ meta.cooktime_minutes }} min</div>
+    {% if meta.servings %}<div><span>Serves</span>{{ meta.servings }}</div>{% endif %}
+    {% if meta.continent %}<div><span>Region</span>{{ meta.continent|cap }}</div>{% endif %}
+  </div>
+
+  {% if tags %}
+  <div class="chips">
+    {% for t in tags %}<a class="chip" href="{{ url_for('index', tag=t.name) }}" title="{{ t.category or '' }}">{{ t.name }}</a>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="columns">
+    <section>
+      <h2>Ingredients</h2>
+      <ul class="ingredients">
+        {% for i in ingredients %}
+        {% if i.group_name and (loop.first or ingredients[loop.index0 - 1].group_name != i.group_name) %}
+        <li class="group">{{ i.group_name|cap }}</li>
+        {% endif %}
+        <li{% if i.original_text %} title="{{ i.original_text }}"{% endif %}>
+          {% if i.amount is not none or (i.unit and i.unit != 'whole') %}
+          <span class="qty">{{ i.amount|amount }}{% if i.unit and i.unit != 'whole' %} {{ i.unit }}{% endif %}</span>
+          {% endif %}
+          {{ i.name }}{% if i.prep_method %}<span class="muted">, {{ i.prep_method }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    <section>
+      <h2>Method</h2>
+      <ol class="steps">
+        {% for s in steps %}
+        {% if s.section and (loop.first or steps[loop.index0 - 1].section != s.section) %}
+        <li class="section">{{ s.section|cap }}</li>
+        {% endif %}
+        <li value="{{ s.step_number }}">{{ s.instruction }}{% if s.duration_text %} <span class="pill">{{ s.duration_text }}</span>{% endif %}</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+
+  <footer class="recipe-footer">
+    <span class="muted">
+      Source:
+      {% if source_is_link %}<a href="{{ meta.source_url }}" target="_blank" rel="noopener">{{ meta.source or meta.source_url }}</a>
+      {% else %}{{ meta.source or 'manual' }}{% endif %}
+    </span>
+    <form method="post" action="{{ url_for('delete_recipe', recipe_id=meta.recipe_id) }}"
+          onsubmit="return confirm('Delete this recipe? This cannot be undone.');">
+      <button class="danger" type="submit">Delete</button>
+    </form>
+  </footer>
+</article>
+{% endblock %}

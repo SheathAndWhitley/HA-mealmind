@@ -1,0 +1,27 @@
+name: ha-mealmind
+
+services:
+  bot:
+    build: .
+    image: mealmind
+    container_name: mealmind-bot
+    restart: unless-stopped
+    # Host networking: the bot reaches Ollama on this machine at localhost:11434
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./users:/app/users:ro
+      - ./backend/src/db:/app/backend/src/db
+
+  web:
+    build: .
+    image: mealmind
+    container_name: mealmind-web
+    command: ["python", "backend/src/web/app.py"]
+    restart: unless-stopped
+    network_mode: host          # serves on http://<server-ip>:${WEB_PORT}
+    environment:
+      WEB_PORT: ${WEB_PORT:-8099}
+      WEB_SECRET_KEY: ${WEB_SECRET_KEY:-}
+    volumes:
+      - ./backend/src/db:/app/backend/src/db

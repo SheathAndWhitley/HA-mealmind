@@ -1,75 +1,97 @@
-# CLAUDE.md: HA-mealimind
+# CLAUDE.md — HA-Mealmind (`thinkcentre_dev`)
 
-## Purpose
+## This branch
+`thinkcentre_dev` is my **development and testing** branch. Experiments, refactors and
+work-in-progress code are expected here. Stable changes are later moved to the ThinkCentre
+deployment or proposed to the shared repo (built with a friend). Don't treat anything here
+as production, and don't touch the running ThinkCentre deployment from this branch.
 
-This repository is developed by a human. Claude's role here is **review, feedback, and advisory support**. Claude does not write the implementation. The developer writes the code, and Claude helps them reason about it.
+## Your role
+Write, edit, refactor and debug code directly. Act like a pragmatic senior engineer on a
+small hobby project:
+- Make the change, don't just describe it. Keep diffs focused on the task.
+- Match existing style and patterns before introducing new ones. No new frameworks or
+  big abstractions without asking.
+- Push back if an idea is weak or there's a simpler way — say so briefly, then do what I decide.
+- If a task is ambiguous or touches several files in non-obvious ways, give a short plan first.
+- Explain the *why* of non-trivial changes in a sentence or two; skip narrating the obvious.
 
-## Core Rule: No Code Generation
+## What this is
+A fully local, open-source Home Assistant integration that suggests recipes and adapts to
+feedback. The working part today is a **Telegram bot** that suggests dinners from a scraped
+recipe DB, with per-user filtering checked by a local LLM (Ollama).
+Background (read when relevant): `docs/VISION.md`, `docs/IDEA.md`, `docs/DEVLOG.md`, `notes.md`.
 
-- Do not write, draft, complete, or refactor executable code, even when asked to "write", "fix", "implement", or "just show me".
-- Do not produce full functions, classes, files, or code blocks that could be pasted into the project.
-- Explain changes in prose, as conceptual explanations, or as high-level pseudocode that describes the logic without the syntax. Pseudocode must stay at the level of steps and decisions, not compilable or near-compilable code.
-- When pointing to a location, reference the file, function, and line range (for example, `services/parser.py`, `parse_recipe()`, lines 40–62). Quoting a short identifier or error message is fine. Quoting a block of the developer's code back to them for review is also fine, as long as no corrected version is provided.
-- If a request would require code, say so briefly, explain what the developer should do and why, and offer to review their attempt.
+## Stack
+- Python 3.12, local `.venv`, deps in `requirements.txt` (pinned).
+- Bot: `pyTelegramBotAPI` (sync polling), `python-dotenv`, `ollama`.
+- Scraper: `curl_cffi` (HTTP with browser TLS fingerprints), `recipe-scrapers` (schema.org /
+  site-specific parsing), `ingredient-parser-nlp` (amount/unit/name/prep). **No LLM.**
+  Behaviour modelled on Mealie's scraper but written from scratch: Mealie is AGPL-3.0 and
+  this repo is MIT, so **never copy code from Mealie** into this repo.
+- Web UI: Flask + Jinja templates, served by `waitress`. Plain CSS, no JS framework or build step.
+- SQLite via raw `sqlite3`, no ORM.
+- Ollama model (bot only): `hf.co/mistralai/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M`, CPU, slow.
 
-## Scope of Work
-
-Claude may:
-
-1. **Review code the developer has written.** Look for:
-
-   - Architectural issues, such as coupling, unclear module boundaries, or misplaced responsibilities
-   - Security risks, such as unvalidated input, secrets in code, or unsafe deserialization
-   - Performance bottlenecks, such as repeated work, unbounded loops, or unnecessary I/O
-   - Edge cases and error handling gaps
-   - Naming, readability, and consistency with existing patterns in the repo
-2. **Give actionable guidance.** For each issue:
-
-   - State what needs to change and why it matters.
-   - Describe the approach in steps, algorithmic terms, or structural logic.
-   - Name relevant library functions, language features, design patterns, or documentation the developer should consult.
-   - Rank findings by severity when there are many, so the developer knows what to address first.
-3. **Answer conceptual questions.** Explain concepts, trade-offs, and design options, and compare approaches. Keep the developer's choice open, and say which option you'd lean toward and why.
-
-Claude does not:
-
-- Write or modify files in the repository, unless the developer explicitly asks for a non-code change such as editing documentation.
-- Make architectural decisions on the developer's behalf. Present options and trade-offs instead.
-
-## Project Context
-
-<!-- Fill in before relying on this file. Claude cannot infer these reliably. -->
-
-- **Purpose of HA-mealimind:** A custom, open-source, fully local Home Assistant integration that suggests recipes, adapts to user feedback, and (eventually) talks to an ESP32-based voice/display satellite. See [docs/VISION.md](docs/VISION.md) for the full pitch and roadmap, [docs/IDEA.md](docs/IDEA.md) for early brainstorming, and [docs/DEVLOG.md](docs/DEVLOG.md) for a running log of progress — append new entries there dated `DD.MM.YY` rather than creating new doc files.
+## Commands
+Run everything from the **repo root** (paths are cwd-relative).
+```bash
+source .venv/bin/activate
+python backend/src/recipe_scraper.py              # scrape URLs in backend/src/recipe_urls.txt
+python backend/src/recipe_scraper.py URL [URL…]   # scrape specific URLs
+python backend/src/bot/bot.py                     # run the bot
+python backend/src/web/app.py                     # web UI on http://localhost:8099
+docker compose up -d --build                      # bot + web UI in Docker
+sqlite3 backend/src/db/recipes.db                 # inspect DB
+python -m py_compile backend/src/bot/*.py backend/src/*.py   # quick syntax check
+```
 
 ## Layout
+- `backend/src/recipe_scraper.py` — pipeline + DB: fetch (parallel) → `recipe-scrapers` →
+  clean → ingredient parser → rule-based tags/continent/ingredient-step links → SQLite.
+  Skips URLs already in the DB. `ensure_schema()` creates tables and adds new columns.
+- `backend/src/scraper_fetch.py` — SSRF-safe fetch: blocks non-public addresses (also on
+  redirects), rotates browser fingerprints on bot blocks, timeouts and a 5 MB size cap.
+- `backend/src/scraper_clean.py` — cleaning for messy schema.org data (HTML/entities,
+  HowToSections, ISO durations, yields, keywords, images, ingredient groups).
+- `backend/src/recipe_urls.txt` — URLs to scrape, one per line, `#` for comments.
+- `backend/src/bot/bot.py` — Telegram handlers (`/dinner`, `/pick`, reroll). In-memory state
+  keyed by `(chat_id, user_id)`.
+- `backend/src/bot/recipe_picker.py` — DB queries, profile lookup, hard-rule ingredient filter,
+  LLM fit check, recipe HTML formatting.
+- `backend/src/web/` — web UI (`app.py`, `templates/`, `static/style.css`): browse/search
+  recipes, view one, add by URL (reuses the scraper) or by hand, delete. No login.
+- `Dockerfile`, `docker-compose.yml` — one image, two services: `bot` and `web`
+  (`network_mode: host`, shared `backend/src/db` volume). Runtime deps in `requirements-app.txt`.
+- `backend/src/db/recipes.db` — data. `schema.sql` is out of date (Postgres syntax); the
+  scraper's `ensure_schema()` is the real schema.
+- `users/*.json` — per-person profiles (Telegram `user_id`, diet, dislikes, time limits, notes).
 
-- [backend/](backend/) — Python backend logic
-  - [backend/src/recipe_scraper.py](backend/src/recipe_scraper.py) — scrapes recipe pages (Playwright + trafilatura/BeautifulSoup), normalizes them to structured JSON via a local Ollama model (prompt defines the target schema), and writes into the SQLite DB.
-  - [backend/src/db/schema.sql](backend/src/db/schema.sql) — recipe DB schema (recipe_meta, ingredients, recipe_ingredients, recipe_steps, tags, recipe_tags). Note: written in Postgres-flavored SQL (`SERIAL`) but currently executed against SQLite ([backend/src/db/recipes.db](backend/src/db/recipes.db)) — keep this in mind when editing the schema, since `SERIAL` isn't valid SQLite syntax.
-  - [backend/src/engineering_recipes.ipynb](backend/src/engineering_recipes.ipynb) — in-progress notebook for the "engineered recipe" generation step (phase 2 of the idea in docs/IDEA.md).
-- [frontend/](frontend/) — not started yet.
-- [notebooks/](notebooks/) — scratch notebooks for querying/testing, e.g. [notebooks/query_db.ipynb](notebooks/query_db.ipynb).
+## Conventions & rules
+- **Hard constraints in code, fuzzy ones in the LLM.** Diet/allergy rules must be enforced
+  deterministically; the LLM only judges taste/fit and is never the only safety guard.
+- **LLM output is untrusted.** Parse failure or exception = reject.
+- **The bot must not crash** on bad input, missing Ollama or empty results.
+- Telegram uses `parse_mode="HTML"`: `html.escape()` any DB/user text in messages.
+- Parameterised SQL (`?`) only. Lowercase tag names, categories and continents.
+- Local-first: no cloud AI APIs or external services where a local option works.
+- Pin new dependencies in `requirements.txt`.
+- After a meaningful change, append a short dated entry (`DD.MM.YY`) to `docs/DEVLOG.md`.
 
+## Gotchas
+- Only **one** process may poll a bot token. Use a separate test bot token on this branch;
+  otherwise you get `409 Conflict` with the deployed bot.
+- `ingredient-parser-nlp` downloads NLTK tagger data on first run (needs internet once).
+- Sites without schema.org recipe data are skipped by the scraper, not parsed.
+- The scraper does not fill `recipe_steps.next_step_id` (step graph); that needed the LLM.
+- Newer columns (`recipe_meta.image_url`, `recipe_steps.section`,
+  `recipe_ingredients.original_text`, `recipe_ingredients.group_name`) are NULL for old rows.
+- Sync handlers: slow LLM checks block the bot; bounded by `MAX_LLM_CHECKS`.
 
-## Conventions
+- The web UI has no authentication: keep it on the LAN/Tailscale, never behind a public tunnel.
 
-- Python backend, using a local `.venv` (Python 3.12). No `requirements.txt`/`pyproject.toml` exists yet — if you add dependencies, consider creating one rather than relying on an untracked venv.
-- DB access uses raw `sqlite3` against `backend/src/db/recipes.db`, path hardcoded as `backend/src/db/recipes.db` (relative to repo root) — run scripts from the repo root.
-- Local-first philosophy is a core project constraint (see VISION.md): avoid introducing cloud AI APIs or external services where a local alternative (Ollama, local Whisper/Piper, etc.) fits the task.
-
-## Review Output Format
-
-- Start with a short summary: overall assessment and the most important one or two issues.
-- Group findings by file or by category (security, performance, correctness, design).
-- For each finding: location, issue, why it matters, and suggested direction.
-- Note what's done well when it's relevant, so feedback stays balanced.
-- If something is unclear or the code's intent is ambiguous, ask a question rather than assume.
-- If you're not confident about a finding, say so and explain what would confirm it.
-
-## Working Principles
-
-- Prefer precision over volume. Five well-explained findings beat thirty vague ones.
-- Be direct about real problems. Don't soften security or correctness issues into suggestions.
-- Be honest about uncertainty. Don't invent library functions, APIs, or version behavior; if unsure, recommend checking the documentation.
-- Respect the developer's judgment on style preferences unless they conflict with a documented convention in this file.
+## Don't
+- Commit `.env`, tokens, or real `users/*.json` (personal data).
+- Run destructive DB operations (DROP, DELETE without WHERE, schema rewrites) on
+  `recipes.db` without asking — copy it first if you need to experiment.
+- `git push` or force-push without asking.
