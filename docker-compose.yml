@@ -1,0 +1,12 @@
+services:
+  mealmind-bot:
+    build: .
+    image: mealmind-bot
+    container_name: mealmind-bot
+    restart: unless-stopped
+    # Host networking: the bot reaches Ollama on the ThinkCentre at localhost:11434
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./users:/app/users:ro
+      - ./backend/src/db:/app/backend/src/db
